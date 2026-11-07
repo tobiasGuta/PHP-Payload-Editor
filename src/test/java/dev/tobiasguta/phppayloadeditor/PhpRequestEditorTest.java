@@ -36,8 +36,10 @@ class PhpRequestEditorTest {
         when(context.editorMode()).thenReturn(mode);
         when(message.request()).thenReturn(request);
         when(request.headerValue("Content-Type")).thenReturn("text/plain");
-        when(request.body()).thenReturn(mockByteArray("before <?php echo 1; ?> after".getBytes(StandardCharsets.UTF_8)));
-        when(request.toByteArray()).thenReturn(mockByteArray("POST / HTTP/1.1\r\n\r\nbefore <?php echo 1; ?> after".getBytes(StandardCharsets.UTF_8)));
+        ByteArray originalBody = mockByteArray("before <?php echo 1; ?> after".getBytes(StandardCharsets.UTF_8));
+        ByteArray originalRequest = mockByteArray("POST / HTTP/1.1\r\n\r\nbefore <?php echo 1; ?> after".getBytes(StandardCharsets.UTF_8));
+        when(request.body()).thenReturn(originalBody);
+        when(request.toByteArray()).thenReturn(originalRequest);
         when(request.withBody(any(ByteArray.class))).thenAnswer(invocation -> {
             ByteArray body = invocation.getArgument(0);
             HttpRequest updated = mock(HttpRequest.class);
