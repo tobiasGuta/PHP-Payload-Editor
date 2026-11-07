@@ -1,2 +1,72 @@
-# PHP-Payload-Editor
-A Burp Suite extension that adds a dedicated PHP code editor to Repeater, featuring syntax highlighting, automatic PHP detection, and seamless editing of PHP payloads within HTTP requests, including multipart file uploads.
+# PHP Payload Editor
+
+A Burp Suite extension that adds a dedicated **PHP Editor** tab to HTTP request editors, including **Repeater**, so PHP payloads can be edited without navigating the raw multipart request.
+
+![Java 21](https://img.shields.io/badge/Java-21-blue) ![Burp Montoya](https://img.shields.io/badge/Montoya-2026.7-orange) ![Build](https://github.com/tobiasGuta/PHP-Payload-Editor/actions/workflows/build-and-release.yml/badge.svg)
+
+## Download
+
+**[Download the latest JAR from GitHub Releases](https://github.com/tobiasGuta/PHP-Payload-Editor/releases)**.
+
+Every push to **main** automatically runs the tests, bundles a JAR, and publishes a **development pre-release** in the Releases section. Pushing a tag beginning with v (for example v0.1.0) publishes a versioned release. The CI run also retains a downloadable build artifact.
+
+## Install in Burp Suite
+
+1. Download php-payload-editor-0.1.0.jar from Releases.
+2. Open **Extensions → Installed → Add** in Burp Suite.
+3. Select **Extension type: Java**, then choose the downloaded JAR.
+4. Open **Repeater** with a request whose body contains `<?php` or `<?=` and select the **PHP Editor** request tab.
+5. Edit the PHP source, then click **Send** as usual. Burp uses the modified HTTP request.
+
+Requires a recent Burp Suite version compatible with **Montoya API 2026.7** and Java 21.
+
+## Features
+
+- Automatic detection of `<?php` and `<?=` code blocks in raw request bodies and multipart/form-data parts.
+- Syntax highlighting, line numbers, bracket matching, indentation, and folding using RSyntaxTextArea.
+- Select between multiple detected PHP blocks using a dropdown; each edit is retained.
+- Preserves multipart headers, boundaries, image prefixes such as `GIF89a`, and non-PHP binary bytes.
+- Changes only the selected PHP byte ranges; Montoya's `withBody` handles the new Content-Length.
+- Respects read-only HTTP editor contexts.
+- No network calls, payload execution, or requests initiated by the extension.
+
+### Example
+
+In a multipart upload like this:
+
+```http
+Content-Disposition: form-data; name="logo"; filename="version2.png.php"
+Content-Type: image/jpeg
+
+GIF89a
+<style>body{font-size:0}</style>
+<?php echo "Hello"; ?>
+```
+
+The tab displays only the PHP block; the `GIF89a` header, HTML, and multipart envelope are retained unmodified when you edit and send.
+
+## Build locally
+
+Java 21 and Maven are required:
+
+```bash
+mvn clean verify
+```
+
+The self-contained extension is generated as `target/php-payload-editor-0.1.0.jar`. The RSyntaxTextArea dependency is bundled into the JAR; Burp supplies the Montoya API.
+
+## Limitations
+
+- Only PHP blocks starting with `<?php` or `<?=` are recognized. The optional PHP short opening tag `<?` is deliberately excluded to avoid XML false positives.
+- Block detection uses the first closing `?>` marker, not a complete PHP lexer. Markers inside a PHP string/comment may confuse the locator.
+- The editor modifies PHP text **inside outgoing HTTP requests**, not files stored on a remote server.
+- For a non-UTF-8 PHP snippet, ISO-8859-1 is used to preserve bytes; unrepresentable edited characters are rejected rather than silently corrupting the request.
+- Multipart boundaries need to be valid and match the Content-Type header.
+
+## Development and security
+
+Developed with the [PortSwigger Montoya API](https://github.com/PortSwigger/burp-extensions-montoya-api) and [RSyntaxTextArea](https://github.com/bobbylight/RSyntaxTextArea). Bug reports and pull requests are welcome.
+
+Use only on systems you own or are authorized to test.
+
+MIT licensed. Copyright © 2026 TobiasGuta.
