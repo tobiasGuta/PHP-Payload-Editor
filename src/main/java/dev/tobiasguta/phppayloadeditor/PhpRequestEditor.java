@@ -5,6 +5,7 @@ import burp.api.montoya.core.ByteArray;
 import burp.api.montoya.http.message.HttpRequestResponse;
 import burp.api.montoya.http.message.requests.HttpRequest;
 import burp.api.montoya.ui.Selection;
+import burp.api.montoya.ui.Theme;
 import burp.api.montoya.ui.editor.extension.EditorCreationContext;
 import burp.api.montoya.ui.editor.extension.EditorMode;
 import burp.api.montoya.ui.editor.extension.ExtensionProvidedHttpRequestEditor;
@@ -33,8 +34,12 @@ import java.util.Map;
  * Original headers and every byte outside edited PHP spans are retained.
  */
 final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
+    private final MontoyaApi api;
     private final JPanel root = new JPanel(new BorderLayout());
     private final RSyntaxTextArea editor = new RSyntaxTextArea(20, 75);
+    private final RTextScrollPane scroll = new RTextScrollPane(editor);
+    private final JComboBox<String> themeMode = new JComboBox<>(
+            new String[]{"Follow Burp", "Dark", "Light"});
     private final JComboBox<PhpPayloadLocator.PhpSpan> blocks = new JComboBox<>();
     private final JLabel status = new JLabel("Open a request containing PHP to edit its payload.");
     private final boolean readOnly;
@@ -47,6 +52,7 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
     private boolean loading = false;
 
     PhpRequestEditor(MontoyaApi api, EditorCreationContext context) {
+        this.api = api;
         readOnly = context.editorMode() == EditorMode.READ_ONLY;
         editor.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_PHP);
         editor.setCodeFoldingEnabled(true);
@@ -56,7 +62,6 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
         editor.setMarkOccurrences(true);
         editor.setEditable(!readOnly);
 
-        RTextScrollPane scroll = new RTextScrollPane(editor);
         scroll.setFoldIndicatorEnabled(true);
         root.add(scroll, BorderLayout.CENTER);
 
@@ -67,6 +72,8 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
         toolbar.add(blocks);
         JLabel hint = new JLabel(readOnly ? "Read-only view" : "Edits sync with the HTTP request");
         toolbar.add(hint);
+        toolbar.add(new JLabel("Theme:"));
+        toolbar.add(themeMode);
         root.add(toolbar, BorderLayout.NORTH);
 
         status.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
@@ -93,7 +100,11 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
                 recordEdit();
             }
         });
+        // Burp themes regular Swing controls; RSTA needs its own syntax palette.
+        // Apply RSTA colors AFTER Burp to prevent a bright white editor.
         api.userInterface().applyThemeToComponent(root);
+        themeMode.addActionListener(event -> applyEditorTheme());
+        applyEditorTheme();
     }
 
     @Override
@@ -118,6 +129,9 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
 
     @Override
     public void setRequestResponse(HttpRequestResponse message) {
+        if (themeMode.getSelectedIndex() == 0) {
+            applyEditorTheme(); // Re-read Burp theme when another request is opened.
+        }
         loading = true;
         try {
             originalRequest = message == null ? null : message.request();
@@ -146,6 +160,13 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
         } finally {
             loading = false;
         }
+    }
+
+    private void applyEditorTheme() {
+        int selected = themeMode.getSelectedIndex();
+        boolean dark = selected == 1 ||
+                (selected == 0 && api.userInterface().currentTheme() == Theme.DARK);
+        EditorThemeSupport.apply(editor, scroll, dark, api.userInterface().currentEditorFont());
     }
 
     private void showBlock(int index) {

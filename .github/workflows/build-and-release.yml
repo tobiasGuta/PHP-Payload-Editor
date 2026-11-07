@@ -25,14 +25,14 @@ jobs:
       - name: Compile and run tests
         run: mvn --batch-mode --no-transfer-progress clean verify
       - name: Generate SHA-256 checksum
-        run: sha256sum target/php-payload-editor-0.1.0.jar > target/php-payload-editor-0.1.0.jar.sha256
+        run: sha256sum target/php-payload-editor-0.1.1.jar > target/php-payload-editor-0.1.1.jar.sha256
       - name: Upload JAR as CI artifact
         uses: actions/upload-artifact@v4
         with:
           name: PHP-Payload-Editor-JAR
           path: |
-            target/php-payload-editor-0.1.0.jar
-            target/php-payload-editor-0.1.0.jar.sha256
+            target/php-payload-editor-0.1.1.jar
+            target/php-payload-editor-0.1.1.jar.sha256
           if-no-files-found: error
       - name: Publish downloadable GitHub release
         if: github.event_name == 'push'
@@ -43,5 +43,5 @@ jobs:
           prerelease: ${{ github.ref_type != 'tag' }}
           generate_release_notes: true
           files: |
-            target/php-payload-editor-0.1.0.jar
-            target/php-payload-editor-0.1.0.jar.sha256
+            target/php-payload-editor-0.1.1.jar
+            target/php-payload-editor-0.1.1.jar.sha256
