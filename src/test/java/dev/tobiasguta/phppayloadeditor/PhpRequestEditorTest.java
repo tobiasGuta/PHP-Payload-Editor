@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import org.mockito.MockedStatic;
 
 class PhpRequestEditorTest {
     private final MontoyaApi api = mock(MontoyaApi.class);
@@ -35,8 +36,8 @@ class PhpRequestEditorTest {
         when(context.editorMode()).thenReturn(mode);
         when(message.request()).thenReturn(request);
         when(request.headerValue("Content-Type")).thenReturn("text/plain");
-        when(request.body()).thenReturn(ByteArray.byteArray("before <?php echo 1; ?> after"));
-        when(request.toByteArray()).thenReturn(ByteArray.byteArray("POST / HTTP/1.1\r\n\r\nbefore <?php echo 1; ?> after"));
+        when(request.body()).thenReturn(mockByteArray("before <?php echo 1; ?> after".getBytes(StandardCharsets.UTF_8)));
+        when(request.toByteArray()).thenReturn(mockByteArray("POST / HTTP/1.1\r\n\r\nbefore <?php echo 1; ?> after".getBytes(StandardCharsets.UTF_8)));
         when(request.withBody(any(ByteArray.class))).thenAnswer(invocation -> {
             ByteArray body = invocation.getArgument(0);
             HttpRequest updated = mock(HttpRequest.class);
@@ -49,6 +50,9 @@ class PhpRequestEditorTest {
     void writableRepeaterTabAcceptsEditsAndReturnsUpdatedRequest() throws Exception {
         onEdt(() -> {
             setup(EditorMode.DEFAULT);
+            try (MockedStatic<ByteArray> factory = mockStatic(ByteArray.class)) {
+            factory.when(() -> ByteArray.byteArray(any(byte[].class)))
+                    .thenAnswer(inv -> mockByteArray(inv.getArgument(0)));
             PhpRequestEditor tab = new PhpRequestEditor(api, context);
             tab.setRequestResponse(message);
             RSyntaxTextArea text = locateEditor(tab.uiComponent());
@@ -61,6 +65,7 @@ class PhpRequestEditorTest {
             HttpRequest result = tab.getRequest();
             assertEquals("before <?php echo 123; ?> after",
                     new String(result.body().getBytes(), StandardCharsets.UTF_8));
+            }
         });
     }
 
@@ -88,6 +93,12 @@ class PhpRequestEditorTest {
             assertFalse(text.isEditable());
             assertFalse(tab.isModified());
         });
+    }
+
+    private static ByteArray mockByteArray(byte[] contents) {
+        ByteArray result = mock(ByteArray.class);
+        when(result.getBytes()).thenReturn(contents);
+        return result;
     }
 
     private static RSyntaxTextArea locateEditor(Component component) {
