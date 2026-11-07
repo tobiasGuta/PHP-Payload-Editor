@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>dev.tobiasguta</groupId>
     <artifactId>php-payload-editor</artifactId>
-    <version>0.1.3</version>
+    <version>0.1.4</version>
     <packaging>jar</packaging>
     <name>PHP Payload Editor</name>
     <description>PHP request editor tab for Burp Suite.</description>
@@ -39,7 +39,7 @@
         </dependency>
     </dependencies>
     <build>
-        <finalName>php-payload-editor-0.1.3</finalName>
+        <finalName>php-payload-editor-0.1.4</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
