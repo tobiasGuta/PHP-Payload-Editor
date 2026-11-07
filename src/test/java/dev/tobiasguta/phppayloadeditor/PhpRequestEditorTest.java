@@ -54,7 +54,7 @@ class PhpRequestEditorTest {
             setup(EditorMode.DEFAULT);
             try (MockedStatic<ByteArray> factory = mockStatic(ByteArray.class)) {
             factory.when(() -> ByteArray.byteArray(any(byte[].class)))
-                    .thenAnswer(inv -> mockByteArray(inv.getArgument(0)));
+                    .thenAnswer(inv -> mockByteArray((byte[]) inv.getRawArguments()[0]));
             PhpRequestEditor tab = new PhpRequestEditor(api, context);
             tab.setRequestResponse(message);
             RSyntaxTextArea text = locateEditor(tab.uiComponent());
