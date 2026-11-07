@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>dev.tobiasguta</groupId>
     <artifactId>php-payload-editor</artifactId>
-    <version>0.1.1</version>
+    <version>0.1.2</version>
     <packaging>jar</packaging>
     <name>PHP Payload Editor</name>
     <description>PHP request editor tab for Burp Suite.</description>
@@ -26,6 +26,12 @@
             <version>3.6.3</version>
         </dependency>
         <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>5.17.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <version>5.11.4</version>
@@ -33,7 +39,7 @@
         </dependency>
     </dependencies>
     <build>
-        <finalName>php-payload-editor-0.1.1</finalName>
+        <finalName>php-payload-editor-0.1.2</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

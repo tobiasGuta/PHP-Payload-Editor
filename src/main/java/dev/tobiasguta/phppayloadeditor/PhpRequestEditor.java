@@ -15,6 +15,7 @@ import org.fife.ui.rtextarea.RTextScrollPane;
 
 import javax.swing.BorderFactory;
 import javax.swing.JComboBox;
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
@@ -25,6 +26,7 @@ import java.awt.Component;
 import java.awt.FlowLayout;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +43,7 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
     private final JComboBox<String> themeMode = new JComboBox<>(
             new String[]{"Follow Burp", "Dark", "Light"});
     private final JComboBox<PhpPayloadLocator.PhpSpan> blocks = new JComboBox<>();
+    private final JButton editButton = new JButton("Edit PHP");
     private final JLabel status = new JLabel("Open a request containing PHP to edit its payload.");
     private final boolean readOnly;
 
@@ -61,6 +64,7 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
         editor.setTabSize(4);
         editor.setMarkOccurrences(true);
         editor.setEditable(!readOnly);
+        editor.setFocusable(true);
 
         scroll.setFoldIndicatorEnabled(true);
         root.add(scroll, BorderLayout.CENTER);
@@ -72,6 +76,15 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
         toolbar.add(blocks);
         JLabel hint = new JLabel(readOnly ? "Read-only view" : "Edits sync with the HTTP request");
         toolbar.add(hint);
+        editButton.setEnabled(!readOnly);
+        editButton.setToolTipText("Focus the PHP source editor to type or paste code");
+        editButton.addActionListener(event -> {
+            if (!readOnly && !spans.isEmpty()) {
+                ensureEditable();
+                editor.requestFocusInWindow();
+            }
+        });
+        toolbar.add(editButton);
         toolbar.add(new JLabel("Theme:"));
         toolbar.add(themeMode);
         root.add(toolbar, BorderLayout.NORTH);
@@ -105,6 +118,7 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
         api.userInterface().applyThemeToComponent(root);
         themeMode.addActionListener(event -> applyEditorTheme());
         applyEditorTheme();
+        ensureEditable();
     }
 
     @Override
@@ -129,12 +143,21 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
 
     @Override
     public void setRequestResponse(HttpRequestResponse message) {
+        HttpRequest next = message == null ? null : message.request();
+        // Burp may refresh the same request while the user is typing, or when
+        // its response changes. Do not throw away uncommitted PHP changes.
+        if (next != null && originalRequest != null
+                && Arrays.equals(next.toByteArray().getBytes(),
+                        originalRequest.toByteArray().getBytes())) {
+            ensureEditable();
+            return;
+        }
         if (themeMode.getSelectedIndex() == 0) {
             applyEditorTheme(); // Re-read Burp theme when another request is opened.
         }
         loading = true;
         try {
-            originalRequest = message == null ? null : message.request();
+            originalRequest = next;
             originalBody = originalRequest == null
                     ? new byte[0] : originalRequest.body().getBytes();
             spans = originalRequest == null ? List.of() :
@@ -147,10 +170,12 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
             }
             if (spans.isEmpty()) {
                 editor.setText("");
+                editButton.setEnabled(false);
                 status.setText("No PHP blocks were detected in this request.");
                 blocks.setEnabled(false);
             } else {
                 blocks.setEnabled(spans.size() > 1);
+                editButton.setEnabled(!readOnly);
                 currentIndex = 0;
                 blocks.setSelectedIndex(0);
                 editor.setText(PhpPayloadLocator.text(originalBody, spans.get(0)));
@@ -159,7 +184,16 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
             }
         } finally {
             loading = false;
+            ensureEditable();
         }
+    }
+
+    private void ensureEditable() {
+        // Theme application / Burp UI refreshes must never leave a writable
+        // Repeater request with a disabled or unfocusable Swing code editor.
+        editor.setEnabled(true);
+        editor.setFocusable(true);
+        editor.setEditable(!readOnly);
     }
 
     private void applyEditorTheme() {
@@ -167,12 +201,14 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
         boolean dark = selected == 1 ||
                 (selected == 0 && api.userInterface().currentTheme() == Theme.DARK);
         EditorThemeSupport.apply(editor, scroll, dark, api.userInterface().currentEditorFont());
+        ensureEditable();
     }
 
     private void showBlock(int index) {
         if (index < 0 || index >= spans.size()) {
             return;
         }
+        syncActiveEdit();
         loading = true;
         try {
             currentIndex = index;
@@ -186,6 +222,10 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
     }
 
     private void recordEdit() {
+        syncActiveEdit();
+    }
+
+    private void syncActiveEdit() {
         if (loading || readOnly || currentIndex < 0 || currentIndex >= spans.size()) {
             return;
         }
@@ -213,6 +253,7 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
 
     @Override
     public boolean isModified() {
+        syncActiveEdit();
         return !readOnly && !edits.isEmpty();
     }
 
