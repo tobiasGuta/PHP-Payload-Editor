@@ -86,6 +86,24 @@ class PhpRequestEditorTest {
     }
 
     @Test
+    void popupApplyWritesBackChangedPhpRequestAndPreservesEnvelope() throws Exception {
+        onEdt(() -> {
+            setup(EditorMode.DEFAULT);
+            try (MockedStatic<ByteArray> factory = mockStatic(ByteArray.class)) {
+                factory.when(() -> ByteArray.byteArray(any(byte[].class)))
+                        .thenAnswer(inv -> mockByteArray((byte[]) inv.getRawArguments()[0]));
+                PhpRequestEditor tab = new PhpRequestEditor(api, context);
+                tab.setRequestResponse(message);
+                assertTrue(tab.applyWindowText("<?php echo 'popup edited'; ?>"));
+                assertTrue(tab.isModified());
+                HttpRequest output = tab.getRequest();
+                assertEquals("before <?php echo 'popup edited'; ?> after",
+                        new String(output.body().getBytes(), StandardCharsets.UTF_8));
+            }
+        });
+    }
+
+    @Test
     void readOnlyContextRemainsReadOnly() throws Exception {
         onEdt(() -> {
             setup(EditorMode.READ_ONLY);

@@ -16,6 +16,10 @@ import org.fife.ui.rtextarea.RTextScrollPane;
 import javax.swing.BorderFactory;
 import javax.swing.JComboBox;
 import javax.swing.JButton;
+import javax.swing.JDialog;
+import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
+import javax.swing.WindowConstants;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
@@ -24,6 +28,7 @@ import javax.swing.event.DocumentListener;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.FlowLayout;
+import java.awt.Dialog;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -43,7 +48,7 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
     private final JComboBox<String> themeMode = new JComboBox<>(
             new String[]{"Follow Burp", "Dark", "Light"});
     private final JComboBox<PhpPayloadLocator.PhpSpan> blocks = new JComboBox<>();
-    private final JButton editButton = new JButton("Edit PHP");
+    private final JButton editButton = new JButton("Edit in Window");
     private final JLabel status = new JLabel("Open a request containing PHP to edit its payload.");
     private final boolean readOnly;
 
@@ -77,13 +82,8 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
         JLabel hint = new JLabel(readOnly ? "Read-only view" : "Edits sync with the HTTP request");
         toolbar.add(hint);
         editButton.setEnabled(!readOnly);
-        editButton.setToolTipText("Focus the PHP source editor to type or paste code");
-        editButton.addActionListener(event -> {
-            if (!readOnly && !spans.isEmpty()) {
-                ensureEditable();
-                editor.requestFocusInWindow();
-            }
-        });
+        editButton.setToolTipText("Open a separate editable PHP window and apply changes to this request");
+        editButton.addActionListener(event -> openEditorWindow());
         toolbar.add(editButton);
         toolbar.add(new JLabel("Theme:"));
         toolbar.add(themeMode);
@@ -221,6 +221,119 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
         }
     }
 
+    /**
+     * Dedicated popup avoids focus/keyboard interception in certain Burp
+     * request-editor contexts. Apply writes the source back to this tab,
+     * and the optional Repeater action opens a NEW tab without sending.
+     */
+    private void openEditorWindow() {
+        if (readOnly || spans.isEmpty() || currentIndex < 0) {
+            return;
+        }
+        syncActiveEdit();
+        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(root),
+                "PHP Payload Editor — Edit Source", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        dialog.setLayout(new BorderLayout(0, 4));
+
+        RSyntaxTextArea popupEditor = new RSyntaxTextArea(28, 90);
+        popupEditor.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_PHP);
+        popupEditor.setCodeFoldingEnabled(true);
+        popupEditor.setAntiAliasingEnabled(true);
+        popupEditor.setTabsEmulated(true);
+        popupEditor.setTabSize(4);
+        popupEditor.setText(editor.getText());
+        popupEditor.setCaretPosition(0);
+        popupEditor.setEnabled(true);
+        popupEditor.setEditable(true);
+        popupEditor.setFocusable(true);
+        RTextScrollPane popupScroll = new RTextScrollPane(popupEditor);
+        popupScroll.setFoldIndicatorEnabled(true);
+        dialog.add(popupScroll, BorderLayout.CENTER);
+
+        JPanel controls = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
+        JLabel explanation = new JLabel("Apply changes to the current request, or open an edited copy in a new Repeater tab.");
+        JButton cancel = new JButton("Cancel");
+        JButton apply = new JButton("Apply Changes");
+        JButton newTab = new JButton("Open in Repeater (new tab)");
+        cancel.addActionListener(event -> dialog.dispose());
+        apply.addActionListener(event -> {
+            if (applyWindowText(popupEditor.getText())) {
+                dialog.dispose();
+            } else {
+                JOptionPane.showMessageDialog(dialog,
+                        "Unable to apply edits. Check the encoding and the request's PHP block.",
+                        "PHP Payload Editor", JOptionPane.WARNING_MESSAGE);
+            }
+        });
+        newTab.addActionListener(event -> {
+            if (!applyWindowText(popupEditor.getText())) {
+                JOptionPane.showMessageDialog(dialog,
+                        "Unable to encode edited PHP. No Repeater tab was created.",
+                        "PHP Payload Editor", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            HttpRequest patched = getRequest();
+            if (patched == null || (patched == originalRequest && isModified())) {
+                JOptionPane.showMessageDialog(dialog,
+                        "Unable to construct the modified request.",
+                        "PHP Payload Editor", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            // sendToRepeater adds a tab but does not issue a network request.
+            api.repeater().sendToRepeater(patched, "PHP Edited");
+            dialog.dispose();
+        });
+        controls.add(explanation);
+        controls.add(cancel);
+        controls.add(newTab);
+        controls.add(apply);
+        dialog.add(controls, BorderLayout.SOUTH);
+        api.userInterface().applyThemeToComponent(dialog.getContentPane());
+        int theme = themeMode.getSelectedIndex();
+        boolean dark = theme == 1 || (theme == 0 && api.userInterface().currentTheme() == Theme.DARK);
+        EditorThemeSupport.apply(popupEditor, popupScroll, dark, api.userInterface().currentEditorFont());
+        // Some look-and-feels change editable state while applying themes.
+        popupEditor.setEnabled(true);
+        popupEditor.setEditable(true);
+        dialog.pack();
+        dialog.setSize(Math.max(900, dialog.getWidth()), Math.max(620, dialog.getHeight()));
+        dialog.setLocationRelativeTo(root);
+        SwingUtilities.invokeLater(popupEditor::requestFocusInWindow);
+        dialog.setVisible(true);
+    }
+
+    /**
+     * Shared, testable command behind the popup's Apply buttons.
+     * A rejected encoding must not corrupt the original request.
+     */
+    boolean applyWindowText(String text) {
+        if (readOnly || currentIndex < 0 || currentIndex >= spans.size()) {
+            return false;
+        }
+        String before = PhpPayloadLocator.text(originalBody, spans.get(currentIndex));
+        Map<Integer, String> candidate = new HashMap<>(edits);
+        if (before.equals(text)) {
+            candidate.remove(currentIndex);
+        } else {
+            candidate.put(currentIndex, text);
+        }
+        try {
+            PhpPayloadLocator.replace(originalBody, spans, candidate);
+        } catch (CharacterCodingException invalid) {
+            status.setText("Cannot encode PHP with the original charset. Changes not applied.");
+            return false;
+        }
+        loading = true;
+        try {
+            editor.setText(text);
+        } finally {
+            loading = false;
+        }
+        syncActiveEdit();
+        return true;
+    }
+
     private void recordEdit() {
         syncActiveEdit();
     }
@@ -248,7 +361,7 @@ final class PhpRequestEditor implements ExtensionProvidedHttpRequestEditor {
         status.setText(spans.size() + " PHP block(s) found  |  "
                 + encoding + "  |  "
                 + (edits.isEmpty() ? "Unmodified" : edits.size() + " block(s) modified")
-                + (readOnly ? "  |  Read-only" : ""));
+                + (readOnly ? "  |  Read-only" : "  |  Writable — or use Edit in Window"));
     }
 
     @Override

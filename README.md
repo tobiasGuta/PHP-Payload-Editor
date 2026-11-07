@@ -8,16 +8,17 @@ A Burp Suite extension that adds a dedicated **PHP Editor** tab to HTTP request 
 
 **[Download the latest JAR from GitHub Releases](https://github.com/tobiasGuta/PHP-Payload-Editor/releases)**.
 
-Every push to **main** automatically runs the tests, bundles a JAR, and publishes a **development pre-release** in the Releases section. Pushing a tag beginning with v (for example v0.1.2) publishes a versioned release. The CI run also retains a downloadable build artifact.
+Every push to **main** automatically runs the tests, bundles a JAR, and publishes a **development pre-release** in the Releases section. Pushing a tag beginning with v (for example v0.1.3) publishes a versioned release. The CI run also retains a downloadable build artifact.
 
 ## Install in Burp Suite
 
-1. Download php-payload-editor-0.1.2.jar from Releases.
+1. Download php-payload-editor-0.1.3.jar from Releases.
 2. Open **Extensions → Installed → Add** in Burp Suite.
 3. Select **Extension type: Java**, then choose the downloaded JAR.
 4. Open **Repeater** with a request whose body contains `<?php` or `<?=` and select the **PHP Editor** request tab.
-5. Edit the PHP source, then click **Send** as usual. Burp uses the modified HTTP request.
-6. You can type directly in the PHP Editor. If keyboard focus is elsewhere, click **Edit PHP** to activate the editor. The editor follows Burp's current dark/light theme when opened. You can switch it manually with **Theme → Dark / Light**, or select **Follow Burp**.
+5. Edit the PHP source directly or use **Edit in Window → Apply Changes**. The bottom status should change to **1 block(s) modified**. Switch to Raw or click Send for Burp to use the modified request.
+   If your Burp build does not synchronize edits from custom tabs, **Edit in Window → Open in Repeater (new tab)** creates a new Repeater request with the patched PHP without sending it.
+6. You can type directly in the PHP Editor. If keyboard focus is elsewhere, click **Edit in Window** to open a standalone PHP code editor. Select **Apply Changes** to return the edited PHP to this request, or **Open in Repeater (new tab)** to generate a patched request in a new tab without sending it. The editor follows Burp's current dark/light theme when opened. You can switch it manually with **Theme → Dark / Light**, or select **Follow Burp**.
 
 Requires a recent Burp Suite version compatible with **Montoya API 2026.7** and Java 21.
 
@@ -30,7 +31,7 @@ Requires a recent Burp Suite version compatible with **Montoya API 2026.7** and 
 - Preserves multipart headers, boundaries, image prefixes such as `GIF89a`, and non-PHP binary bytes.
 - Changes only the selected PHP byte ranges; Montoya's `withBody` handles the new Content-Length.
 - Respects read-only HTTP editor contexts.
-- Edit PHP directly in Repeater; the **Edit PHP** button focuses the code editor. If Burp refreshes a request or its response while you are working, uncommitted text changes for that same request are preserved.
+- Edit PHP directly in Repeater, or click **Edit in Window** for a large popup with explicit **Apply Changes**, **Cancel**, and **Open in Repeater (new tab)** buttons. If Burp refreshes a request or its response while you are working, uncommitted text changes for that same request are preserved.
 - No network calls, payload execution, or requests initiated by the extension.
 
 ### Example
@@ -56,7 +57,7 @@ Java 21 and Maven are required:
 mvn clean verify
 ```
 
-The self-contained extension is generated as `target/php-payload-editor-0.1.2.jar`. The RSyntaxTextArea dependency is bundled into the JAR; Burp supplies the Montoya API.
+The self-contained extension is generated as `target/php-payload-editor-0.1.3.jar`. The RSyntaxTextArea dependency is bundled into the JAR; Burp supplies the Montoya API.
 
 ## Limitations
 
